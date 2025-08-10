@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>AdMan – Banner Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Lora:wght@400;600&family=Montserrat:wght@600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<header class="topbar"><div class="wrap"><div class="brand"><span class="dot"></span> AdMan</div><div style="display:flex;align-items:center;gap:10px"><span id="userEmail"></span><button class="btn ghost" id="logoutBtn">Sign out</button></div></div></header>
+<div class="layout">
+<aside class="sidebar"><nav class="nav">
+  <a href="dashboard.html">Dashboard</a>
+  <a href="banners.html">Banner Editor</a>
+  <a href="emails.html">Email Editor</a>
+  <a href="landings.html">Landing Editor</a>
+  <a href="settings.html">Settings</a>
+</nav></aside>
+<main class="main">
+  <h1 style="margin-top:0">Banner Editor</h1>
+  <div class="row cols-2">
+    <div class="card" style="padding:16px">
+      <div class="row cols-2">
+        <div>
+          <label class="label">Banner size</label>
+          <select class="input" id="size">
+            <option value="250x250">250×250 (square)</option>
+            <option value="300x600">300×600 (vertical)</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">Design preset</label>
+          <select class="input" id="preset">
+            <option value="modern">Modern</option>
+            <option value="warm">Warm</option>
+            <option value="minimal">Minimal</option>
+          </select>
+        </div>
+      </div>
+      <label class="label">Text</label>
+      <input class="input" id="text" placeholder="Big Summer Sale"/>
+
+      <div class="row cols-3" style="margin-top:10px">
+        <div><label class="label">Background</label><input type="color" class="input" id="bg" value="#ffffff"></div>
+        <div><label class="label">Text color</label><input type="color" class="input" id="fg" value="#111827"></div>
+        <div><label class="label">Font</label>
+          <select class="input" id="font">
+            <option value="Inter">Inter (Sans)</option>
+            <option value="Lora">Lora (Serif)</option>
+            <option value="Montserrat">Montserrat (Display)</option>
+          </select>
+        </div>
+      </div>
+      <label class="label">Background image (URL, optional)</label>
+      <input class="input" id="bgimg" placeholder="https://...">
+
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button class="btn primary" id="saveBtn">Save</button>
+        <button class="btn" id="exportPngBtn">Export PNG</button>
+        <button class="btn ghost" id="exportHtmlBtn">Export HTML</button>
+      </div>
+    </div>
+
+    <div class="card" style="padding:16px">
+      <div class="label">Live preview</div>
+      <div class="banner-frame">
+        <div id="preview" class="banner-preview" style="width:250px;height:250px;overflow:hidden;position:relative">
+          <div id="previewText" style="font:800 28px Montserrat;">Big Summer Sale</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="padding:16px;margin-top:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between"><div>Saved banners</div><button class="btn ghost" id="refreshList">Refresh</button></div>
+    <div id="list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:12px"></div>
+  </div>
+</main>
+</div>
+<div class="toast"></div>
+<script type="module">
+import { authGate, initTopbar, wireSidebarActive, toast, enableCtrlS } from './app.js';
+import { getStore, setStore, uid, nowISO } from './storage.js';
+
+authGate(); initTopbar(); wireSidebarActive();
+
+const state = { size:'250x250', text:'Big Summer Sale', bg:'#ffffff', fg:'#111827', font:'Montserrat', preset:'modern', bgimg:'' };
+const el = {
+  size:document.querySelector('#size'), text:document.querySelector('#text'), bg:document.querySelector('#bg'), fg:document.querySelector('#fg'), font:document.querySelector('#font'), preset:document.querySelector('#preset'), bgimg:document.querySelector('#bgimg'), preview:document.querySelector('#preview'), ptext:document.querySelector('#previewText'), list:document.querySelector('#list')
+};
+
+function applyPreset(){
+  const p = getStore('adman.palettes');
+  const palette = p[state.preset]||p.modern;
+  if(!el.bgimg.value){ el.bg.value = palette.accent; }
+  el.fg.value = '#111827';
+}
+
+function updatePreview(){
+  const [w,h] = state.size.split('x').map(Number);
+  el.preview.style.width = w+'px'; el.preview.style.height = h+'px';
+  el.preview.style.background = state.bgimg? `url(${state.bgimg}) center/cover no-repeat` : state.bg;
+  el.ptext.textContent = state.text||' ';
+  el.ptext.style.color = state.fg;
+  el.ptext.style.fontFamily = `'${state.font}', var(--font-sans)`;
+  el.ptext.style.textAlign='center';
+  el.ptext.style.padding='12px';
+  el.ptext.style.lineHeight='1.1';
+  el.ptext.style.wordBreak='break-word';
+  // scale text roughly to size
+  const base = Math.max(18, Math.min( Math.floor(Math.min(w,h)/ (state.text.length>12? 10 : 7)), 48));
+  el.ptext.style.fontWeight='800';
+  el.ptext.style.fontSize = base+'px';
+  el.ptext.style.position='absolute';
+  el.ptext.style.left='50%'; el.ptext.style.top='50%'; el.ptext.style.transform='translate(-50%,-50%)';
+}
+
+['size','text','bg','fg','font','preset','bgimg'].forEach(k=>{
+  document.querySelector('#'+k).addEventListener('input', (e)=>{
+    state[k]=e.target.value; if(k==='preset') applyPreset(); if(k==='bgimg' && state.bgimg){}; updatePreview();
+  })
+});
+applyPreset(); updatePreview();
+
+document.querySelector('#saveBtn').addEventListener('click', ()=>{
+  const list = getStore('adman.banners', []);
+  const item = { id:uid('ban'), ...state, updated: nowISO() };
+  list.unshift(item); setStore('adman.banners', list);
+  toast('Banner saved'); loadList();
+});
+
+document.querySelector('#exportHtmlBtn').addEventListener('click', ()=>{
+  const [w,h] = state.size.split('x');
+  const html = `<!doctype html><meta charset='utf-8'><style>body{margin:0}</style><div style="width:${w}px;height:${h}px;display:flex;align-items:center;justify-content:center;background:${state.bgimg?`url(${state.bgimg}) center/cover no-repeat`:state.bg};"><div style="font:800 28px '${state.font}',sans-serif;color:${state.fg};text-align:center;padding:12px;">${state.text}</div></div>`;
+  const blob = new Blob([html], {type:'text/html'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'banner.html'; a.click();
+});
+
+document.querySelector('#exportPngBtn').addEventListener('click', async ()=>{
+  const canvas = document.createElement('canvas');
+  const [w,h] = state.size.split('x').map(Number);
+  canvas.width=w; canvas.height=h; const ctx = canvas.getContext('2d');
+  // bg
+  if(state.bgimg){
+    const img = new Image(); img.crossOrigin='anonymous'; img.src = state.bgimg; await img.decode();
+    ctx.drawImage(img,0,0,w,h);
+  } else { ctx.fillStyle = state.bg; ctx.fillRect(0,0,w,h); }
+  // text
+  const fontSize = Math.max(18, Math.min( Math.floor(Math.min(w,h)/ (state.text.length>12? 10 : 7)), 48));
+  ctx.fillStyle = state.fg; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font = `800 ${fontSize}px ${state.font}, sans-serif`;
+  const lines = wrapText(ctx, state.text, w-24);
+  const lineHeight = fontSize*1.15; const startY = h/2 - (lines.length-1)*lineHeight/2;
+  lines.forEach((ln,i)=> ctx.fillText(ln, w/2, startY + i*lineHeight));
+  const a = document.createElement('a'); a.href = canvas.toDataURL('image/png'); a.download='banner.png'; a.click();
+});
+
+function wrapText(ctx, text, maxWidth){
+  const words = text.split(' '); const lines=[]; let line='';
+  for(let w of words){ const test = line? line+' '+w: w; if(ctx.measureText(test).width>maxWidth){ lines.push(line||w); line=w; } else { line=test; } }
+  if(line) lines.push(line); return lines;
+}
+
+function loadList(){
+  const items = getStore('adman.banners', []);
+  el.list.innerHTML='';
+  items.forEach(it=>{
+    const c = document.createElement('div'); c.className='card'; c.style.padding='10px';
+    c.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <div><div style="font-weight:700">${it.text}</div><div style="color:var(--sub);font-size:12px">${it.size} • ${new Date(it.updated).toLocaleString()}</div></div>
+      <button class="btn ghost" data-id="${it.id}">Activate</button>
+    </div>`;
+    c.querySelector('button').addEventListener('click',()=>{
+      localStorage.setItem('adman.activeCampaign', JSON.stringify({type:'Banner', title: it.text, since: Date.now()}));
+      toast('Active campaign set');
+    });
+    el.list.appendChild(c);
+  })
+}
+
+document.querySelector('#refreshList').addEventListener('click', loadList);
+loadList();
+
+enableCtrlS(()=>document.querySelector('#saveBtn').click());
+</script>
+</body></html>

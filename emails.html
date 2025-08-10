@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>AdMan – Email Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Lora:wght@400;600&family=Montserrat:wght@600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<header class="topbar"><div class="wrap"><div class="brand"><span class="dot"></span> AdMan</div><div style="display:flex;align-items:center;gap:10px"><span id="userEmail"></span><button class="btn ghost" id="logoutBtn">Sign out</button></div></div></header>
+<div class="layout">
+<aside class="sidebar"><nav class="nav">
+  <a href="dashboard.html">Dashboard</a>
+  <a href="banners.html">Banner Editor</a>
+  <a href="emails.html">Email Editor</a>
+  <a href="landings.html">Landing Editor</a>
+  <a href="settings.html">Settings</a>
+</nav></aside>
+<main class="main">
+  <h1 style="margin-top:0">Email Editor (650px)</h1>
+  <div class="row cols-2">
+    <div class="card" style="padding:16px">
+      <label class="label">Template</label>
+      <select class="input" id="template">
+        <option value="newsletter">Newsletter</option>
+        <option value="promo">Promo</option>
+        <option value="announce">Announcement</option>
+      </select>
+      <label class="label">Title</label><input class="input" id="title" placeholder="Weekly updates"/>
+      <label class="label">Hero image URL</label><input class="input" id="hero" placeholder="https://..."/>
+      <label class="label">Body text</label><textarea class="input" id="body" rows="6" placeholder="Write your message..."></textarea>
+      <div class="row cols-2">
+        <div><label class="label">CTA label</label><input class="input" id="ctaLabel" placeholder="Read more"></div>
+        <div><label class="label">CTA URL</label><input class="input" id="ctaUrl" placeholder="https://"></div>
+      </div>
+      <div class="row cols-3" style="margin-top:10px">
+        <div><label class="label">BG</label><input type="color" class="input" id="bg" value="#ffffff"></div>
+        <div><label class="label">Text</label><input type="color" class="input" id="fg" value="#111827"></div>
+        <div><label class="label">Font</label>
+          <select class="input" id="font">
+            <option value="Inter">Inter</option><option value="Lora">Lora</option><option value="Montserrat">Montserrat</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button class="btn primary" id="save">Save</button>
+        <button class="btn" id="download">Download HTML</button>
+      </div>
+    </div>
+    <div class="card" style="padding:16px">
+      <div class="label">Live preview (650px)</div>
+      <iframe id="preview" style="width:650px;height:520px;background:white;border-radius:12px;border:1px solid #e5e7eb"></iframe>
+    </div>
+  </div>
+
+  <div class="card" style="padding:16px;margin-top:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between"><div>Saved emails</div><button class="btn ghost" id="refresh">Refresh</button></div>
+    <div id="list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-top:12px"></div>
+  </div>
+</main>
+</div>
+<div class="toast"></div>
+<script type="module">
+import { authGate, initTopbar, wireSidebarActive, toast, enableCtrlS } from './app.js';
+import { getStore, setStore, uid, nowISO } from './storage.js';
+
+authGate(); initTopbar(); wireSidebarActive();
+
+const state={template:'newsletter',title:'Weekly updates',hero:'',body:'Hello world',ctaLabel:'Read more',ctaUrl:'#',bg:'#ffffff',fg:'#111827',font:'Inter'};
+const el={
+  template:document.querySelector('#template'), title:document.querySelector('#title'), hero:document.querySelector('#hero'), body:document.querySelector('#body'), ctaLabel:document.querySelector('#ctaLabel'), ctaUrl:document.querySelector('#ctaUrl'), bg:document.querySelector('#bg'), fg:document.querySelector('#fg'), font:document.querySelector('#font'), iframe:document.querySelector('#preview'), list:document.querySelector('#list')
+};
+
+const tpl = {
+  newsletter:(s)=>`
+  <table role="presentation" width="650" cellspacing="0" cellpadding="0" style="margin:auto;background:${s.bg};color:${s.fg};font-family:${s.font},Arial,sans-serif">
+    <tr><td style="padding:24px 28px"><h1 style="margin:0 0 8px;font-weight:800">${s.title}</h1><p style="margin:0 0 12px;opacity:.8">${s.body}</p>
+      ${s.hero?`<img src="${s.hero}" width="596" style="border-radius:10px;display:block;margin:14px 0">`:''}
+      <a href="${s.ctaUrl}" style="display:inline-block;background:#3b82f6;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none">${s.ctaLabel}</a>
+    </td></tr>
+    <tr><td style="padding:18px 28px;color:#6b7280;font-size:12px">You received this email because you subscribed.</td></tr>
+  </table>`,
+  promo:(s)=>`
+  <table role="presentation" width="650" cellspacing="0" cellpadding="0" style="margin:auto;background:${s.bg};color:${s.fg};font-family:${s.font},Arial,sans-serif">
+    <tr><td style="padding:0"><img src="${s.hero||'https://via.placeholder.com/650x260?text=Promo'}" width="650" style="display:block"></td></tr>
+    <tr><td style="padding:22px 28px"><h2 style="margin:0 0 8px;font-weight:800">${s.title}</h2><p style="margin:0 0 14px;opacity:.85">${s.body}</p>
+    <a href="${s.ctaUrl}" style="display:inline-block;background:#10b981;color:#0b0b0b;padding:10px 14px;border-radius:10px;text-decoration:none">${s.ctaLabel}</a></td></tr>
+  </table>`,
+  announce:(s)=>`
+  <table role="presentation" width="650" cellspacing="0" cellpadding="0" style="margin:auto;background:${s.bg};color:${s.fg};font-family:${s.font},Arial,sans-serif">
+    <tr><td style="padding:26px 28px;text-align:center"><h1 style="margin:0 0 6px;font-weight:800">${s.title}</h1>
+    ${s.hero?`<img src="${s.hero}" width="596" style="border-radius:10px;display:block;margin:12px auto">`:''}
+    <p style="margin:8px 0 16px;opacity:.9">${s.body}</p>
+    <a href="${s.ctaUrl}" style="display:inline-block;background:#111827;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none">${s.ctaLabel}</a>
+    </td></tr>
+  </table>`
+};
+
+function render(){ const doc = el.iframe.contentDocument; doc.open(); doc.write(tpl[state.template](state)); doc.close(); }
+['template','title','hero','body','ctaLabel','ctaUrl','bg','fg','font'].forEach(k=>{
+  document.querySelector('#'+k).addEventListener('input',e=>{ state[k]=e.target.value; render(); })
+});
+render();
+
+document.querySelector('#download').addEventListener('click',()=>{
+  const html = `<!doctype html><meta charset='utf-8'>${tpl[state.template](state)}`;
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([html],{type:'text/html'})); a.download = 'email.html'; a.click();
+});
+
+document.querySelector('#save').addEventListener('click',()=>{
+  const list = getStore('adman.emails', []);
+  list.unshift({ id:uid('em'), ...state, updated: nowISO() });
+  setStore('adman.emails', list); toast('Email saved'); loadList();
+});
+
+function loadList(){
+  el.list.innerHTML='';
+  const items = getStore('adman.emails', []);
+  items.forEach(it=>{
+    const c=document.createElement('div'); c.className='card'; c.style.padding='10px';
+    c.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <div><div style="font-weight:700">${it.title}</div><div style="color:var(--sub);font-size:12px">${it.template} • ${new Date(it.updated).toLocaleString()}</div></div>
+      <button class="btn ghost" data-id="${it.id}">Activate</button>
+    </div>`;
+    c.querySelector('button').addEventListener('click',()=>{
+      localStorage.setItem('adman.activeCampaign', JSON.stringify({type:'Email', title: it.title, since: Date.now()}));
+      toast('Active campaign set');
+    })
+    el.list.appendChild(c);
+  })
+}
+
+document.querySelector('#refresh').addEventListener('click', loadList);
+loadList();
+
+enableCtrlS(()=>document.querySelector('#save').click());
+</script>
+</body></html>

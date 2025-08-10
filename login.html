@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>AdMan – Sign in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Lora:wght@400;600&family=Montserrat:wght@600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<div class="container" style="max-width:420px;padding-top:10vh">
+  <div class="card" style="padding:22px 22px 16px">
+    <div class="brand" style="margin-bottom:12px"><span class="dot"></span> AdMan</div>
+    <h1 style="margin:6px 0 2px;font:800 22px var(--font-display)">Welcome back</h1>
+    <p style="margin:0 0 18px;color:var(--sub)">Sign in to manage campaigns</p>
+
+    <label class="label" for="email">Email</label>
+    <input class="input" id="email" type="email" placeholder="you@example.com"/>
+
+    <label class="label" for="password">Password</label>
+    <input class="input" id="password" type="password" placeholder="••••••••"/>
+
+    <div style="display:flex;gap:10px;align-items:center;margin-top:14px">
+      <button class="btn primary" id="loginBtn">Sign in</button>
+      <a class="btn ghost" href="register.html">Create account</a>
+    </div>
+    <footer class="meta">English-only • LocalStorage demo</footer>
+  </div>
+</div>
+<div class="toast"></div>
+<script type="module">
+import { getStore, setStore } from './storage.js';
+import { NS, seedDefaults, toast } from './app.js';
+seedDefaults();
+
+function validate(email, password){
+  if(!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return 'Enter a valid email';
+  if(!password || password.length < 6) return 'Password must be at least 6 characters';
+  return null;
+}
+
+function login(){
+  const email = document.querySelector('#email').value.trim().toLowerCase();
+  const password = document.querySelector('#password').value;
+
+  const err = validate(email,password);
+  if(err){ toast(err,'error'); return; }
+
+  const users = getStore(`${NS}.users`, []);
+  const match = users.find(u => u.email === email && u.password === password);
+  if(match){
+    setStore(`${NS}.user`, { email, ts: Date.now() });
+    toast('Signed in');
+    setTimeout(()=>location.href='dashboard.html',400);
+  } else {
+    toast('Invalid email or password','error');
+  }
+}
+
+document.querySelector('#loginBtn').addEventListener('click', login);
+window.addEventListener('keydown',e=>{ if(e.key==='Enter') login(); });
+
+// If already signed in, go to dashboard
+if(getStore(`${NS}.user`)) location.href='dashboard.html';
+</script>
+</body>
+</html>
